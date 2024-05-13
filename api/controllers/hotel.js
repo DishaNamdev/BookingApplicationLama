@@ -1,5 +1,5 @@
 import Hotel from "../models/Hotels.js";
-
+import Room from  "../models/Rooms.js";
 
 export const createHotel = async (req, res, next) => {
   const newHotel = new Hotel(req.body);
@@ -49,9 +49,14 @@ export const getSingleHotel = async (req, res) => {
 export const getAllHotels = async (req, res, next) => {
   console.log("from the get all hotels");
   // next();//(2)
+  const { min, max,limit, ...others} = req.query;
 
   try {
-    const hotels = await Hotel.find();
+    // const hotels = await Hotel.find(req.query);
+    const hotels = await Hotel.find({
+      ...others,
+      cheapestPrice: {$gt: min || 1, $lt: max || 999},
+    }).limit(parseInt(limit));
     console.log(hotels);
     res.status(200).json(hotels);
   } catch (err) {
@@ -59,6 +64,61 @@ export const getAllHotels = async (req, res, next) => {
     next(err); //(3)
   }
 };
+
+
+//APIs to get the featured hotels
+export const countByCity = async (req, res) => {
+
+  const cities = req.query.cities.split(',');
+  try {
+    // const list = await Promise.all(cities.map(city=>{
+    //   return Hotel.find({city: city}).length;
+    // }));//(4)
+
+    const list = await Promise.all(cities.map(city=>{
+      return Hotel.countDocuments({city: city});
+    }))
+  res.status(200).json(list);
+  } catch (err) {
+    res.status(500).json(err);
+  }
+};
+
+export const countByType = async (req, res,next) => {
+  
+  try {
+    const hotelCount = await Hotel.countDocuments({type: "hotel"});
+    const appartmentCount = await Hotel.countDocuments({type: "appartment"});
+    const resortCount = await Hotel.countDocuments({type: "resort"});
+    const villaCount = await Hotel.countDocuments({type: "village"});
+    const cabinCount = await Hotel.countDocuments({type: "cabin"});
+
+    // const requestedHotel = await Hotel.findById(req.params.id);
+
+    res.status(200).json([
+      {type: "hotels", count: hotelCount},
+      {type: "apartments", count: appartmentCount},
+      {type: "resorts", count: resortCount},
+      {type: "villas", count: villaCount},
+      {type: "cabins", count: cabinCount}
+    ]);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getHotelRooms = async(req,res,next)=>{
+  try{
+    const hotel = await Hotel.findById(req.params.id);
+    const list = await Promise.all(hotel.rooms.map(room => {
+      return Room.findById(room);
+    }));
+    res.status(200).json(list);
+  }catch(err){
+    next(err);
+  }
+}
+
 /**
  * (1) if i send the reponse like this then the old object will be returned so to get the updated one,
  * we have to set the new property to true. This happneds because findByIdAndUpdate method return the
@@ -73,4 +133,8 @@ export const getAllHotels = async (req, res, next) => {
  *
  * (3) when we pass something to the next it is always a error, this error will be later catched up by the second middleware
  * according to our code in index.js
+ * 
+ * (4) we are not going to use this way of counting the cities. This is going to fetch all those data therefore, it is an 
+ * expenssive operation. Instead of this we will use mongoDB countDocuments method. This function countDocuments doesn't fetch
+ * any documents it just shows the count.
  */
